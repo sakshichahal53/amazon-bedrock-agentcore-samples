@@ -811,8 +811,12 @@ Resources:
                 Action:
                   - bedrock:InvokeModel
                   - bedrock:InvokeModelWithResponseStream
+                  - bedrock:GetInferenceProfile
+                  - bedrock:ListInferenceProfiles
+                  - bedrock:UseInferenceProfile
                 Resource:
                   - 'arn:aws:bedrock:*::foundation-model/*'
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-Memory-Execution-Role'

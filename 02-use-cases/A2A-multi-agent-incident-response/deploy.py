@@ -177,6 +177,26 @@ def check_s3_bucket_exists(bucket_name: str, region: str) -> bool:
     return success
 
 
+def check_stack_exists(stack_name: str, region: str) -> bool:
+    """Check if CloudFormation stack already exists"""
+    success, output = run_command(
+        [
+            "aws",
+            "cloudformation",
+            "describe-stacks",
+            "--stack-name",
+            stack_name,
+            "--region",
+            region,
+            "--query",
+            "Stacks[0].StackStatus",
+            "--output",
+            "text",
+        ]
+    )
+    return success
+
+
 def validate_cognito_domain_name(domain_name: str) -> Tuple[bool, str]:
     """Validate Cognito User Pool domain name"""
     if not domain_name:
@@ -231,6 +251,7 @@ def run_command(
 ) -> Tuple[bool, str]:
     """Run a shell command and return (success, output)"""
     try:
+        print_header("----RUNNING COMMAND---" + str(cmd))
         result = subprocess.run(
             cmd, capture_output=capture_output, text=True, timeout=timeout, check=False
         )
@@ -240,6 +261,7 @@ def run_command(
     except FileNotFoundError:
         return (False, f"Command not found: {cmd[0]}")
     except Exception as e:
+        print("Exception occured while run command for stack creation: " + str(e))
         return (False, str(e))
 
 
@@ -465,34 +487,40 @@ def collect_deployment_parameters(account_id: str = None) -> Dict[str, Any]:
 
     # Admin User Configuration
     print()
-    print_info("Admin User Configuration for Cognito User Pool")
-    print_info("This user will be created automatically in the user pool")
+    print_info("Admin User Configuration for Cognito User Pool (OPTIONAL)")
+    print_info("Leave empty to skip user creation if you don't have permissions")
+    print_info("The M2M (machine-to-machine) authentication will still work without a user")
     print()
 
     admin_email = get_input(
-        "Admin User Email",
+        "Admin User Email (press Enter to skip)",
         default=(
             existing_config.get("cognito", {}).get("admin_email")
             if use_existing
             else ""
         ),
-        required=True,
-    )
-
-    # Validate email format
-    import re
-    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    while not re.match(email_pattern, admin_email):
-        print_error("Invalid email format. Please enter a valid email address.")
-        admin_email = get_input("Admin User Email", required=True)
-
-    config["cognito"]["admin_email"] = admin_email
-
-    print_info("Admin password (optional - leave empty for auto-generated temporary password)")
-    admin_password = get_secret(
-        "Admin User Password (press Enter to skip)",
         required=False,
     )
+
+    # Validate email format only if provided
+    if admin_email:
+        import re
+        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        while not re.match(email_pattern, admin_email):
+            print_error("Invalid email format. Please enter a valid email address or press Enter to skip.")
+            admin_email = get_input("Admin User Email (press Enter to skip)", required=False)
+            if not admin_email:  # User chose to skip
+                break
+
+    config["cognito"]["admin_email"] = admin_email if admin_email else ""
+
+    admin_password = ""
+    if admin_email:
+        print_info("Admin password (optional - leave empty for auto-generated temporary password)")
+        admin_password = get_secret(
+            "Admin User Password (press Enter to skip)",
+            required=False,
+        )
 
     config["cognito"]["admin_password"] = admin_password if admin_password else ""
 
@@ -808,6 +836,18 @@ def deploy_stack(
     """Generic function to deploy a CloudFormation stack (always via S3)"""
     if description:
         print_info(description, thread_safe=thread_safe)
+
+    # Check if stack already exists
+    if check_stack_exists(stack_name, region):
+        print_warning(
+            f"⚠️  Stack '{stack_name}' already exists - skipping creation",
+            thread_safe=thread_safe,
+        )
+        print_info(
+            f"To redeploy this stack, first delete it with: aws cloudformation delete-stack --stack-name {stack_name} --region {region}",
+            thread_safe=thread_safe,
+        )
+        return True
 
     print_info(f"Creating CloudFormation stack: {stack_name}", thread_safe=thread_safe)
 

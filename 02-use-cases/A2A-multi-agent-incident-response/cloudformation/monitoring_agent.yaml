@@ -819,8 +819,12 @@ Resources:
                 Action:
                   - bedrock:InvokeModel
                   - bedrock:InvokeModelWithResponseStream
+                  - bedrock:GetInferenceProfile
+                  - bedrock:ListInferenceProfiles
+                  - bedrock:UseInferenceProfile
                 Resource:
                   - 'arn:aws:bedrock:*::foundation-model/*'
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-Memory-Execution-Role'
@@ -864,7 +868,7 @@ Resources:
 
                     Format each extracted fact as a clear, concise statement that could stand alone as a reference point in a monitoring dashboard.
                     Assistant:
-                  ModelId: "global.anthropic.claude-haiku-4-5-20251001-v1:0"
+                  ModelId: !Ref BedrockModelId
                 Consolidation:
                   AppendToPrompt: |
                     Human: You are a monitoring knowledge manager responsible for maintaining a coherent database of AWS infrastructure and application metrics.
@@ -888,7 +892,7 @@ Resources:
 
                     The monitoring knowledge base must maintain both precision and temporal context to support effective incident analysis and pattern recognition.
                     Assistant:
-                  ModelId: "global.anthropic.claude-haiku-4-5-20251001-v1:0"
+                  ModelId: !Ref BedrockModelId
         - SemanticMemoryStrategy: 
             Name: SemanticMemory
             Namespaces:
